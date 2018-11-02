@@ -37,7 +37,7 @@ struct State {
     user_handle: ImString,
     test_data: String,
 
-    chat_instance: ssb::ChatInstance,
+    chat_instance: Option<ssb::ChatInstance>,
 }
 
 impl Default for State {
@@ -50,7 +50,7 @@ impl Default for State {
 //        text_multiline.push_str("Hello, world!\nMultiline");
         let mut user_handle = ImString::with_capacity(32);
         user_handle.push_str("USER_HANDLE_NOT_FOUND");
-        let mut chat_instance = ssb::ChatInstance::new();
+        //let mut chat_instance = ssb::ChatInstance::new();
         let mut chat_networks_available = vec!(String::from("ssb"), String::from("misc-altnet"));
         State {
             open: true,
@@ -72,7 +72,7 @@ impl Default for State {
             user_handle,
             test_data: String::from("nothing"),
 
-            chat_instance
+            chat_instance: None,
         }
     }
 }
@@ -162,10 +162,10 @@ fn main() {
 
             if state.chat_start_load {
                 state.chat_instance =
-                    ssb::ChatInstance::new_from_msg_type(
+                    Some(ssb::ChatInstance::new(
                         state.chat_message_type.clone(),
-                        state.chat_network_name.clone());
-                state.chat_main_buf.push_str(&state.chat_instance.format_messages_to_string());
+                        state.chat_network_name.clone()));
+                state.chat_main_buf.push_str(&state.chat_instance.as_mut().unwrap().format_messages_to_string());
                 state.user_handle = ImString::new(ssb::get_user_handle(
                     ssb::whoami(&state.chat_network_name), &state.chat_network_name));
                 state.show_chat_screen = true;
@@ -325,11 +325,11 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
 //                                    (display_x, display_y - 50.0))
 //                .read_only(true)
 //                .build();
-            for msg in &state.chat_instance.chat_messages {
-                ui.push_item_width(190.0);
+            for msg in &mut state.chat_instance.as_mut().unwrap().chat_messages {
+                ui.push_item_width(170.0);
                 ui.text_wrapped(im_str!("{}", msg.author_handle));
                 ui.pop_item_width();
-                ui.same_line(200.0);
+                ui.same_line(180.0);
                 ui.text_wrapped(im_str!("{}", msg.text));
             }
 //            let s = state.chat_main_buf.clone();
@@ -359,18 +359,45 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
 
 
     window.build(|| {
-        ui.set_cursor_screen_pos((10.0, display_y - 38.0));
+
+        ui.set_cursor_screen_pos((10.0, display_y - 36.0));
+        if let Some(ref mut chat_instance) = state.chat_instance {
+            ui.text_colored((0.5,0.5,0.5,0.8),
+                            im_str!("{}:", chat_instance.current_user_handle));
+        }
+
+        ui.push_item_width(display_x - 440.0);
+        ui.set_cursor_screen_pos((180.0, display_y - 38.0));
         ui.input_text(im_str!(" "), &mut state.chat_input_buf)
             .build();
 //        ui.same_line(500.0);
-        ui.set_cursor_screen_pos((display_x - 150.0, display_y - 45.0));
-        if ui.button(im_str!("close"), (100.0, 32.0)) {
-            state.chat_instance.kill();
+        ui.set_cursor_screen_pos((display_x - 130.0, display_y - 40.0));
+        if ui.button(im_str!("close"), (80.0, 28.0)) {
+//            match &mut state.chat_instance {
+//                Some(ref mut chat) => chat.kill(),
+//                None => (),
+//            }
+            if let Some(ref mut chat_instance) = state.chat_instance {
+                chat_instance.kill();
+            }
+//            state.chat_instance.unwrap().kill();
             state.show_chat_screen = false;
             state.show_intro_screen = true;
         }
-        ui.set_cursor_screen_pos((display_x - 300.0, display_y - 45.0));
-        ui.checkbox(im_str!("auto_scroll"), &mut state.auto_scroll);
+        ui.set_cursor_screen_pos((display_x - 240.0, display_y - 40.0));
+        if ui.button(im_str!("publish"), (100.0, 28.0)) {
+            if let Some(ref mut chat_instance) = state.chat_instance {
+                chat_instance.publish_message(state.chat_input_buf.to_str().to_string());
+            }
+
+        }
+        ui.set_cursor_screen_pos((display_x - 40.0, display_y - 38.0));
+        ui.checkbox(im_str!("  "), &mut state.auto_scroll);
+        if ui.is_item_hovered() {
+            ui.tooltip(|| {
+                ui.text("auto-scroll?");
+            });
+        }
     });
 }
 

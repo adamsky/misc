@@ -13,24 +13,18 @@ use std::process;
 use sbot;
 
 pub struct ChatInstance {
+    pub network_name: String,
+    pub msg_type: String,
     pub sbot_server: Option<process::Child>,
     pub user_names: HashMap<String, String>,
     pub chat_messages: Vec<ChatMessage>,
     pub all_about_messages: Vec<Message>,
     pub unique_users: Vec<String>,
+    pub current_user_handle: String,
 }
 
 impl ChatInstance {
-    pub fn new() -> ChatInstance {
-        ChatInstance {
-            sbot_server: None,
-            user_names: HashMap::new(),
-            chat_messages: Vec::new(),
-            all_about_messages: Vec::new(),
-            unique_users: Vec::new()
-        }
-    }
-    pub fn new_from_msg_type(msg_type: String, network_name: String) -> ChatInstance {
+    pub fn new(msg_type: String, network_name: String) -> ChatInstance {
         let sbot_server = sbot::new_sbot_server(&network_name).expect("failed starting sbot server");
         println!("started sbot server");
         use std::{thread, time};
@@ -65,13 +59,18 @@ impl ChatInstance {
 //        let unique_users: Vec<String> = Vec::new();
 //        let all_about_messages: Vec<Message> = Vec::new();
 //        let user_names: HashMap<String, String> = HashMap::new();
+
+        let current_user_handle = get_user_handle(whoami(&network_name), &network_name);
+
         ChatInstance {
+            network_name,
+            msg_type,
             sbot_server: Some(sbot_server),
-//            sbot_server: None,
             user_names,
             chat_messages,
             all_about_messages,
             unique_users,
+            current_user_handle,
         }
     }
     pub fn format_messages_to_string(&self) -> String {
@@ -93,7 +92,29 @@ impl ChatInstance {
             },
         };
     }
+    pub fn publish_message(&mut self, text: String) {
+        Command::new("sbot")
+            .env("ssb_appname", &self.network_name)
+            .arg("publish")
+            .arg("--type")
+            .arg(&self.msg_type)
+            .arg("--text")
+            .arg(text)
+            .output()
+            .expect("failed to execute process");
 
+        self.refresh();
+    }
+    // reload messages?
+    pub fn refresh(&mut self) {
+        self.chat_messages = get_chat_messages_of_type(&self.msg_type, 100, &self.network_name);
+        // update messages to contain user handles
+        for mut chat_msg in &mut self.chat_messages {
+            if self.user_names.contains_key(&chat_msg.author) {
+                chat_msg.author_handle = self.user_names[&chat_msg.author].clone();
+            }
+        }
+    }
 
 }
 
