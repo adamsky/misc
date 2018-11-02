@@ -1,0 +1,23 @@
+[package]
+name = "misc"
+version = "0.1.0"
+authors = ["Adam Adamsky <adam@adms.ky>"]
+
+[dependencies]
+gfx = "0.17"
+gfx_window_glutin = "0.26"
+glium = { version = "0.22", default-features = true }
+glutin = "0.18"
+#imgui = { version = "0.0.21-pre", git = "https://github.com/Gekkio/imgui-rs" }
+imgui = { git = "https://github.com/Gekkio/imgui-rs" }
+imgui-gfx-renderer = { version = "0.0.22-pre", git = "https://github.com/Gekkio/imgui-rs" }
+#imgui-glium-renderer = { version = "0.0.21-pre", git = "https://github.com/Gekkio/imgui-rs" }
+imgui-glium-renderer = { git = "https://github.com/Gekkio/imgui-rs" }
+image = "0.20.0"
+
+tokio = "0.1.3"
+futures = "0.1.18"
+
+serde = "1.0.80"
+serde_json = "1.0.32"
+serde_derive = "1.0.80"
