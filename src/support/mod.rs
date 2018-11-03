@@ -17,7 +17,7 @@ pub fn run<F: FnMut(&Ui) -> bool>(title: String, clear_color: [f32; 4], mut run_
     let context = glutin::ContextBuilder::new().with_vsync(true);
     let builder = glutin::WindowBuilder::new()
         .with_title(title)
-        .with_dimensions(glutin::dpi::LogicalSize::new(1024f64, 768f64));
+        .with_dimensions(glutin::dpi::LogicalSize::new(800f64, 600f64));
     let display = Display::new(builder, context, &events_loop).unwrap();
     let window = display.gl_window();
 

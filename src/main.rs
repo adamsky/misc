@@ -9,6 +9,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 
+
 use imgui::*;
 
 mod support;
@@ -49,7 +50,7 @@ impl Default for State {
 //        let mut text_multiline = ImString::with_capacity(128);
 //        text_multiline.push_str("Hello, world!\nMultiline");
         let mut user_handle = ImString::with_capacity(32);
-        user_handle.push_str("USER_HANDLE_NOT_FOUND");
+        user_handle.push_str("???");
         //let mut chat_instance = ssb::ChatInstance::new();
         let mut chat_networks_available = vec!(String::from("ssb"), String::from("misc-altnet"));
         State {
@@ -226,17 +227,11 @@ fn show_intro_screen(ui: &Ui, state: &mut State) {
                 if ui.combo(
                     im_str!(" "),
                     &mut state.chat_networks_current_index,
-//                    &[
-//                        im_str!("ssb mainnet"),
-//                        im_str!("altnet0"),
-//                        im_str!("altnet1"),
-//                        im_str!("altnet2"),
-//                        im_str!("altnet3"),
-//                    ],
-                        network_names.as_slice(),
-//                    &state.chat_networks_available.iter().map(|name| ImStr::new(&name)),
+                    network_names.as_slice(),
                     -1) {
                     state.chat_network_name = state.chat_networks_available[state.chat_networks_current_index as usize].clone();
+                    state.user_handle.clear();
+                    state.user_handle.push_str("???");
                 }
 
                 ui.with_color_vars(&[(ImGuiCol::Text, (0.5,0.5,0.5,0.8))], || {
@@ -245,7 +240,8 @@ fn show_intro_screen(ui: &Ui, state: &mut State) {
                                 im_str!("network"));
                 });
                 ui.same_line(410.0);
-                show_help_marker(&ui, "Choose the network to use.\n\nCurrently you can only use the ssb mainnet.");
+                show_help_marker(&ui, "Choose the network.");
+                ui.pop_item_width();
 
                 ui.push_item_width(320.0);
                 ui.combo(
@@ -266,8 +262,9 @@ fn show_intro_screen(ui: &Ui, state: &mut State) {
                 });
                 ui.same_line(455.0);
                 show_help_marker(&ui, "Only messages of one specific type\nwill be used for a single chat instance.");
+                ui.pop_item_width();
 
-
+                ui.push_item_width(250.0);
                 ui.input_text(im_str!("   "), &mut state.user_handle)
                     .read_only(true)
                     .build();
@@ -277,6 +274,14 @@ fn show_intro_screen(ui: &Ui, state: &mut State) {
                     ui.text_colored((0.7,0.7,0.7,0.5),
                                     im_str!("handle"));
                 });
+                ui.same_line(250.0);
+                if ui.button(im_str!("preload"), (80.0, 24.0)) {
+                    let mut sbot = sbot::new_sbot_server(&state.chat_network_name).unwrap();
+                    let user_pubkey = ssb::whoami(&state.chat_network_name);
+                    state.user_handle = ImString::new(ssb::get_user_handle(user_pubkey, &state.chat_network_name));
+                    sbot.kill();
+                }
+
                 ui.same_line(400.0);
                 show_help_marker(&ui,
                                  "This is the latest handle\nyou've picked for yourself.\n\n\
@@ -325,9 +330,16 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
 //                                    (display_x, display_y - 50.0))
 //                .read_only(true)
 //                .build();
+            let user_name_colors = state.chat_instance.as_mut().unwrap().user_name_colors.clone();
             for msg in &mut state.chat_instance.as_mut().unwrap().chat_messages {
+//                let text_size = ui.calc_text_size(im_str!("{}", msg.text), false, display_x - 188.0);
                 ui.push_item_width(170.0);
-                ui.text_wrapped(im_str!("{}", msg.author_handle));
+                let mut author_handle: String = msg.author_handle.clone();
+                if author_handle.len() > 15 {
+                    author_handle.truncate(15);
+                    author_handle.push_str("..");
+                }
+                ui.text_colored(user_name_colors[&msg.author], im_str!("{}", author_handle));
                 ui.pop_item_width();
                 ui.same_line(180.0);
                 ui.text_wrapped(im_str!("{}", msg.text));
@@ -362,14 +374,22 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
 
         ui.set_cursor_screen_pos((10.0, display_y - 36.0));
         if let Some(ref mut chat_instance) = state.chat_instance {
+            let mut current_user_handle: String = chat_instance.current_user_handle.clone();
+            if current_user_handle.len() > 15 {
+                current_user_handle.truncate(15);
+                current_user_handle.push_str("..");
+            }
             ui.text_colored((0.5,0.5,0.5,0.8),
-                            im_str!("{}:", chat_instance.current_user_handle));
+                            im_str!("{}:", current_user_handle));
         }
 
         ui.push_item_width(display_x - 440.0);
         ui.set_cursor_screen_pos((180.0, display_y - 38.0));
-        ui.input_text(im_str!(" "), &mut state.chat_input_buf)
-            .build();
+        if ui.input_text(im_str!(" "), &mut state.chat_input_buf)
+            .enter_returns_true(true)
+            .build() {
+            publish_from_input_buf(state);
+        }
 //        ui.same_line(500.0);
         ui.set_cursor_screen_pos((display_x - 130.0, display_y - 40.0));
         if ui.button(im_str!("close"), (80.0, 28.0)) {
@@ -386,9 +406,8 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
         }
         ui.set_cursor_screen_pos((display_x - 240.0, display_y - 40.0));
         if ui.button(im_str!("publish"), (100.0, 28.0)) {
-            if let Some(ref mut chat_instance) = state.chat_instance {
-                chat_instance.publish_message(state.chat_input_buf.to_str().to_string());
-            }
+            publish_from_input_buf(state);
+
 
         }
         ui.set_cursor_screen_pos((display_x - 40.0, display_y - 38.0));
@@ -399,6 +418,19 @@ fn show_chat_screen(ui: &Ui, state: &mut State) {
             });
         }
     });
+}
+
+fn publish_from_input_buf(state: &mut State) {
+
+    println!("{}", &state.chat_input_buf.to_str());
+    if &state.chat_input_buf.to_str() == &"" {
+        println!("can't publish an empty message, silly!");
+        return;
+    }
+    if let Some(ref mut chat_instance) = state.chat_instance {
+        chat_instance.publish_message(state.chat_input_buf.to_str().to_string());
+    }
+    state.chat_input_buf.clear();
 }
 
 fn show_loading_screen(ui: &Ui) {
